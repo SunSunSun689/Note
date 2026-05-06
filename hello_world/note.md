@@ -66,3 +66,38 @@ Rust是`静态类型`语言，在编译时就必须知道所有变量的类型�
     }
 ```
 vector类型是标准库提供的一种类似数组的集合类型，数组长度不固定。不确定数组长度推荐使用vector，确定数组长度可使用array
+
+# 函数
+`fn`关键字声明一个新函数，Rust不在乎被调用的函数的位置，必须在调用函数的作用域内
+## 参数
+```bash
+    fn main(){
+        another_function(8,'h');   
+    }
+
+    fn another_function(value: i32, unit_label:char){
+        println!("The measurement is {value}{unit_label}");
+    }
+```
+*必须声明每一个参数的类型*
+
+## 语句和表达式
+Rust是一门基于表达式的语言。
+- 语句：是执行一些操作但不返回值的指令
+- 表达式：是计算并产生一个值。*表达式不以分号结尾*，可以是语句的一部分。
+
+## 具有返回值的函数
+在自定义的five函数中只有数字5,`-> i32`指定返回值类型是i32，没有参数。five函数是表达式。
+```bash
+    fn five() -> i32{
+        5
+    }
+    fn main(){
+        let x = five();  #使用函数的返回值初始化变量x，等价于 let x = 5; 
+        println!(The value of x is {x});
+    }
+```
+
+# 控制流
+Rust中最常见的控制执行流的结构是if表达式和循环
+
