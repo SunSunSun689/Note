@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#101827" />
+  <meta name="description" content="交互式了解 NextAI Translator 如何选择模型、发送请求并流式展示翻译。" />
+  <title>模型调用链 · NextAI Translator</title>
+  <style>
+    :root { font-family: Inter, "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; color: #eaf0f7; background: #0a101b; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; background: radial-gradient(circle at 88% 7%, #1d3b4a 0, transparent 26%), radial-gradient(circle at 8% 42%, #172840 0, transparent 30%), #0a101b; }
+    button { font: inherit; cursor: pointer; }
+    a { color: #a6e7da; }
+    .shell { max-width: 1440px; margin: auto; padding: 32px clamp(18px, 4vw, 64px) 80px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; color: #a6b8c7; font-size: 13px; letter-spacing: .06em; }
+    .brand { display: flex; align-items: center; gap: 11px; font-weight: 700; color: #ecf6f4; }
+    .brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid #4bc7b4; border-radius: 9px; color: #6ee0c9; font-size: 18px; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #74dbc6; box-shadow: 0 0 12px #74dbc6; }
+    .hero { padding: 70px 0 43px; max-width: 850px; }
+    .eyebrow { color: #7ce4cf; font-size: 12px; font-weight: 800; letter-spacing: .19em; text-transform: uppercase; }
+    h1 { margin: 17px 0 17px; font-size: clamp(38px, 5.6vw, 76px); line-height: 1.12; letter-spacing: -.06em; }
+    h1 span { color: #80e0cb; }
+    .lede { color: #a5b6c6; font-size: clamp(15px, 1.5vw, 18px); line-height: 1.8; max-width: 700px; margin: 0; }
+    .legend { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 24px; }
+    .tag { border: 1px solid #314252; border-radius: 100px; color: #9fb3c4; padding: 7px 12px; font-size: 12px; }
+    .main-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(310px, .86fr); gap: 22px; align-items: start; }
+    .panel { background: rgba(17, 26, 40, .9); border: 1px solid #28384a; border-radius: 22px; box-shadow: 0 22px 60px #0003; }
+    .flow-panel { padding: 25px; }
+    .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 17px; }
+    h2 { margin: 0; font-size: 19px; letter-spacing: -.025em; }
+    .muted { color: #8298aa; }
+    .tiny { font-size: 12px; }
+    .phase-label { display: flex; align-items: center; gap: 9px; color: #7ce4cf; font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; margin: 29px 0 13px; }
+    .phase-label::after { content: ""; height: 1px; flex: 1; background: #304354; }
+    .steps { display: grid; gap: 9px; }
+    .step { position: relative; width: 100%; text-align: left; display: grid; grid-template-columns: 42px 1fr 25px; align-items: center; gap: 15px; border: 1px solid #2a3c4d; border-radius: 15px; background: #162234; color: #e5eff7; padding: 14px 16px; transition: border .2s, background .2s, transform .2s; }
+    .step:hover, .step:focus-visible { border-color: #70cdbc; background: #1a3040; outline: none; transform: translateX(2px); }
+    .step.active { border-color: #6dd9c3; background: linear-gradient(90deg, #193c43, #192c3c); box-shadow: inset 3px 0 #76e1c9; }
+    .step-number { color: #72dcc5; font: 700 13px ui-monospace, monospace; }
+    .step-title { font-weight: 700; font-size: 15px; }
+    .step-sub { color: #91a7b8; font-size: 12px; margin-top: 4px; line-height: 1.5; }
+    .step-arrow { color: #7190a1; text-align: right; font-size: 20px; }
+    .connector { width: 1px; height: 10px; background: #557b83; margin-left: 36px; }
+    .detail-panel { padding: 25px; position: sticky; top: 18px; min-height: 518px; }
+    .detail-kicker { color: #76ddc8; font-size: 12px; letter-spacing: .14em; font-weight: 800; margin-bottom: 20px; }
+    .detail-title { font-size: 29px; line-height: 1.2; font-weight: 800; margin-bottom: 14px; letter-spacing: -.04em; }
+    .detail-copy { color: #aec0ce; font-size: 14px; line-height: 1.8; min-height: 78px; }
+    .source-box { background: #0d1927; border: 1px solid #2b4350; border-radius: 12px; padding: 15px; margin-top: 23px; }
+    .box-label { display: block; color: #7497a7; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 9px; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .source-path { font-size: 12px; color: #91e5d3; overflow-wrap: anywhere; }
+    .detail-note { border-left: 2px solid #e6b77d; padding: 4px 0 4px 13px; margin-top: 24px; color: #c2cbd2; font-size: 13px; line-height: 1.65; }
+    .section { margin-top: 66px; }
+    .section-head { margin-bottom: 20px; }
+    .section-head h2 { font-size: clamp(25px, 3vw, 37px); margin: 8px 0; }
+    .section-head p { color: #9eb1c0; margin: 0; line-height: 1.7; }
+    .lab { display: grid; grid-template-columns: 310px minmax(0, 1fr); gap: 18px; }
+    .controls { padding: 23px; }
+    .control-group + .control-group { margin-top: 26px; }
+    .control-title { color: #aabdc9; font-size: 12px; font-weight: 800; letter-spacing: .08em; margin-bottom: 11px; }
+    .segmented { display: flex; flex-wrap: wrap; gap: 7px; }
+    .choice { background: #111e2e; color: #b5c6d2; border: 1px solid #304459; border-radius: 10px; padding: 9px 12px; font-size: 13px; }
+    .choice:hover, .choice:focus-visible { border-color: #8cdeca; outline: none; }
+    .choice.selected { color: #0a2529; background: #80e2cc; border-color: #80e2cc; font-weight: 800; }
+    .hint { font-size: 12px; color: #7891a3; line-height: 1.65; margin: 11px 0 0; }
+    .request-panel { overflow: hidden; }
+    .request-meta { display: flex; flex-wrap: wrap; gap: 8px; padding: 19px 21px 0; }
+    .method { color: #122630; background: #7ce3cf; border-radius: 6px; font: 800 11px ui-monospace, monospace; padding: 5px 7px; }
+    .endpoint { font: 12px ui-monospace, monospace; color: #d4e5ec; overflow-wrap: anywhere; align-self: center; }
+    .request-caption { color: #829cad; font-size: 12px; padding: 9px 21px 14px; }
+    pre { color: #d3e8e6; background: #0a1624; border-top: 1px solid #263a4a; margin: 0; padding: 20px 22px; overflow: auto; font-size: 12px; line-height: 1.7; min-height: 257px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .simulation { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .85fr); gap: 18px; margin-top: 18px; }
+    .sim-card { padding: 23px; }
+    .sim-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .run { border: 0; border-radius: 10px; background: #7ce3cf; color: #102b2c; font-weight: 800; padding: 10px 15px; }
+    .run:hover, .run:focus-visible { background: #a2f4de; outline: 2px solid #fff4; }
+    .run:disabled { opacity: .6; cursor: wait; }
+    .timeline { display: flex; flex-wrap: wrap; gap: 9px; padding: 21px 0 4px; }
+    .timeline span { color: #9baebd; background: #192b3b; border: 1px solid #30495b; border-radius: 9px; padding: 8px 10px; font-size: 12px; }
+    .timeline span.live { color: #14272a; background: #80e2cc; border-color: #80e2cc; }
+    .output { min-height: 95px; color: #e7f7f4; font-size: 19px; line-height: 1.65; margin-top: 17px; }
+    .output.placeholder { color: #70899c; font-size: 14px; }
+    .mini-explain { display: grid; gap: 13px; margin-top: 16px; }
+    .mini-row { display: grid; grid-template-columns: 86px 1fr; gap: 12px; font-size: 12px; line-height: 1.6; }
+    .mini-row strong { color: #79d9c6; }
+    .mini-row span { color: #a4b8c6; }
+    .footer { border-top: 1px solid #253848; color: #758fa1; font-size: 12px; line-height: 1.8; margin-top: 65px; padding-top: 24px; }
+    @media (max-width: 920px) { .main-grid, .lab, .simulation { grid-template-columns: 1fr; } .detail-panel { position: static; min-height: 0; } .hero { padding-top: 54px; } }
+    @media (max-width: 560px) { .shell { padding-top: 18px; } .topbar-right { display: none; } .flow-panel, .detail-panel, .controls, .sim-card { padding: 18px; } .step { grid-template-columns: 30px 1fr 14px; gap: 10px; padding: 12px; } .connector { margin-left: 27px; } .hero { padding-top: 43px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true">↗</span><span>NEXTAI TRANSLATOR <span class="muted">/ CODE MAP</span></span></div><div class="topbar-right"><span class="dot"></span><span>基于当前仓库代码 · 交互式说明</span></div></header>
+    <main>
+      <section class="hero"><div class="eyebrow">From selection to stream</div><h1>一次翻译，<br><span>模型是怎么被调用的？</span></h1><p class="lede">从网页划词到模型返回译文，沿着真实代码路径走一遍。点击流程节点看实现位置；切换服务商和运行平台，看请求如何变化。</p><div class="legend"><span class="tag">浏览器扩展 / Tauri</span><span class="tag">17 种服务商入口</span><span class="tag">流式响应</span><span class="tag">代码定位</span></div></section>
+      <section class="main-grid" aria-label="模型调用流程">
+        <div class="panel flow-panel"><div class="panel-heading"><h2>调用路径</h2><span class="tiny muted">点击节点查看细节 ↗</span></div><div class="phase-label">界面与配置</div><div class="steps" id="flow-steps"></div></div>
+        <aside class="panel detail-panel" aria-live="polite"><div class="detail-kicker" id="detail-kicker">STEP 01 / 06</div><div class="detail-title" id="detail-title"></div><p class="detail-copy" id="detail-copy"></p><div class="source-box"><span class="box-label">关键代码</span><div class="source-path" id="detail-source"></div></div><div class="detail-note" id="detail-note"></div></aside>
+      </section>
+      <section class="section"><div class="section-head"><div class="eyebrow">Request lab</div><h2>切换配置，观察请求</h2><p>这里展示代码会组装出的请求结构。示例密钥被遮盖，不会向模型发出真实请求。</p></div><div class="lab"><div class="panel controls"><div class="control-group"><div class="control-title">01 · 选择服务商</div><div class="segmented" id="provider-options" role="group" aria-label="服务商"></div><p class="hint">操作可单独设置服务商和模型；未设置时读取全局配置。</p></div><div class="control-group"><div class="control-title">02 · 运行平台</div><div class="segmented" id="platform-options" role="group" aria-label="运行平台"></div><p class="hint" id="transport-hint"></p></div></div><div class="panel request-panel"><div class="request-meta"><span class="method">POST</span><span class="endpoint" id="endpoint"></span></div><div class="request-caption" id="request-caption"></div><pre id="request-code"></pre></div></div><div class="simulation"><div class="panel sim-card"><div class="sim-top"><div><div class="eyebrow">Stream demo</div><h2 style="margin-top:8px">模拟一次流式返回</h2></div><button class="run" id="run-demo">播放流程 →</button></div><div class="timeline" id="timeline"><span>发送请求</span><span>后台转发</span><span>解析 SSE</span><span>逐段显示</span></div><div class="output placeholder" id="demo-output">点击播放，观察文字如何逐段出现。</div><p class="hint">演示数据，不调用真实模型，也不会使用你的 API Key。</p></div><div class="panel sim-card"><div class="eyebrow">Response path</div><h2 style="margin-top:8px">返回后发生什么</h2><div class="mini-explain"><div class="mini-row"><strong>HTTP 数据</strong><span>浏览器后台或 Tauri Rust 将响应流送回界面。</span></div><div class="mini-row"><strong>事件解析</strong><span><code>fetchSSE()</code> 拆出每条 SSE；引擎提取文本增量。</span></div><div class="mini-row"><strong>界面更新</strong><span><code>onMessage</code> 更新译文，结束时写入翻译历史。</span></div><div class="mini-row"><strong>中止请求</strong><span>使用 <code>AbortSignal</code> 停止正在进行的翻译。</span></div></div></div></div></section>
+    </main>
+    <footer class="footer">依据当前工作区的 NextAI Translator 代码绘制。请求体为帮助理解而简化的示例；实际提示词、模型和地址取决于用户设置与操作配置。页面独立展示，不修改翻译应用。</footer>
+  </div>
+  <script>
+    const steps = [
+      { title: '选中文字或输入内容', sub: 'content script / 弹窗捕获待翻译文本', copy: '浏览器页面中的划词事件由 content script 捕获，打开翻译卡片。扩展弹窗也可直接输入文字。桌面端则由原生窗口接收选中的文本。', source: 'src/browser-extension/content_script/index.tsx · src/tauri/windows/TranslatorWindow.tsx', note: '入口不同，但后续都会进入共用的翻译界面。' },
+      { title: 'Translator 发起翻译', sub: '收集文本、语言、操作和取消信号', copy: 'Translator 组件拿到源语言、目标语言和当前操作，调用 translate()，同时传入 onMessage、onFinish 和 onError 回调。', source: 'src/common/components/Translator.tsx:1436', note: '重新翻译或关闭时，AbortSignal 可以中止当前请求。' },
+      { title: '生成提示词并选模型', sub: '操作配置优先，随后回退到全局设置', copy: 'translate() 按翻译、润色、总结等操作组织提示词。操作如果指定了 provider 或 apiModel，会覆盖全局服务商或模型。', source: 'src/common/translate.ts:190 · :412–428', note: '这里选择的是“服务商引擎”和模型名称；它并不在本地运行云模型。' },
+      { title: '引擎构造 API 请求', sub: 'OpenAI / DeepSeek / Ollama 等适配器', copy: 'getEngine() 找到服务商对应的引擎。OpenAI 兼容引擎读取地址、路径、模型和密钥，组装 POST 请求；默认 OpenAI gpt-5-nano 走 Responses API。', source: 'src/common/engines/index.ts · abstract-openai.ts:197', note: 'Ollama 使用本地 /v1/chat/completions；DeepSeek 使用它自己的云端地址。' },
+      { title: '平台转发流式请求', sub: '浏览器后台 / Tauri Rust', copy: '扩展通过 runtime Port 将请求送到后台 service worker，由后台 fetch 并转发数据块。Tauri 使用 Rust fetch_stream 命令和窗口事件传回数据块。', source: 'src/common/utils.ts:411 · src/browser-extension/background/index.ts:35 · src-tauri/src/fetch.rs:44', note: '网络出口因平台而异；提示词与引擎选择逻辑复用 src/common。' },
+      { title: '解析增量并渲染译文', sub: 'SSE → onMessage → 界面和历史记录', copy: 'fetchSSE() 解析响应事件；引擎提取文本增量后调用 onMessage。Translator 将增量合并到译文，完成后保存翻译历史。', source: 'src/common/engines/abstract-openai.ts:250 · src/common/components/Translator.tsx:1436', note: '流式结果会边收到边显示，无须等待整段文本结束。' }
+    ];
+    const flow = document.getElementById('flow-steps');
+    const renderDetail = (index) => {
+      document.querySelectorAll('.step').forEach((el, i) => { el.classList.toggle('active', i === index); el.setAttribute('aria-pressed', String(i === index)); });
+      const step = steps[index];
+      document.getElementById('detail-kicker').textContent = `STEP ${String(index + 1).padStart(2, '0')} / 06`;
+      document.getElementById('detail-title').textContent = step.title;
+      document.getElementById('detail-copy').textContent = step.copy;
+      document.getElementById('detail-source').textContent = step.source;
+      document.getElementById('detail-note').textContent = step.note;
+    };
+    steps.forEach((step, i) => {
+      if (i === 3) { const label = document.createElement('div'); label.className = 'phase-label'; label.textContent = '网络与返回'; flow.appendChild(label); }
+      const button = document.createElement('button'); button.className = 'step'; button.type = 'button';
+      button.innerHTML = `<span class="step-number">${String(i + 1).padStart(2, '0')}</span><span><span class="step-title">${step.title}</span><span class="step-sub" style="display:block">${step.sub}</span></span><span class="step-arrow" aria-hidden="true">↗</span>`;
+      button.addEventListener('click', () => renderDetail(i)); flow.appendChild(button);
+      if (i < steps.length - 1 && i !== 2) { const connector = document.createElement('div'); connector.className = 'connector'; flow.appendChild(connector); }
+    });
+    renderDetail(0);
+
+    const providers = {
+      openai: { label: 'OpenAI', model: 'gpt-5-nano', endpoint: 'https://api.openai.com/v1/responses', caption: '官方默认地址 + gpt-5-nano → Responses API', body: { model: 'gpt-5-nano', stream: true, reasoning: { effort: 'minimal' }, instructions: '你是一名翻译助手…', input: 'Only reply the result…\n\nHello world' } },
+      deepseek: { label: 'DeepSeek', model: 'deepseek-chat（示例）', endpoint: 'https://api.deepseek.com/v1/chat/completions', caption: '服务商适配器读取用户配置的模型与密钥', body: { model: 'deepseek-chat', stream: true, messages: [{ role: 'user', content: '你是一名翻译助手…\n\nOnly reply the result…\n\nHello world' }] } },
+      ollama: { label: 'Ollama', model: 'qwen3:14b（示例）', endpoint: 'http://localhost:11434/v1/chat/completions', caption: '本地兼容接口；模型名和地址均由设置决定', body: { model: 'qwen3:14b', stream: true, reasoning_effort: 'none', keep_alive: '5m', messages: [{ role: 'user', content: '你是一名翻译助手…\n\nOnly reply the result…\n\nHello world' }] } }
+    };
+    const platforms = { browser: { label: '浏览器扩展', hint: 'content script → runtime Port → background fetch → 响应数据块' }, tauri: { label: 'Tauri 桌面端', hint: 'React 窗口 → fetchStream 命令 → Rust fetch_stream → 窗口事件' } };
+    let provider = 'openai', platform = 'browser';
+    function renderChoices(containerId, values, selected, onSelect) {
+      const container = document.getElementById(containerId); container.replaceChildren();
+      Object.entries(values).forEach(([key, value]) => { const button = document.createElement('button'); button.className = `choice${key === selected ? ' selected' : ''}`; button.type = 'button'; button.textContent = value.label; button.setAttribute('aria-pressed', String(key === selected)); button.addEventListener('click', () => onSelect(key)); container.appendChild(button); });
+    }
+    function renderRequest() {
+      renderChoices('provider-options', providers, provider, key => { provider = key; renderRequest(); });
+      renderChoices('platform-options', platforms, platform, key => { platform = key; renderRequest(); });
+      const item = providers[provider]; document.getElementById('endpoint').textContent = item.endpoint; document.getElementById('request-caption').textContent = `${item.caption} · ${platforms[platform].label}`;
+      document.getElementById('transport-hint').textContent = platforms[platform].hint;
+      document.getElementById('request-code').textContent = `Authorization: Bearer <密钥已隐藏>\nContent-Type: application/json\n\n${JSON.stringify(item.body, null, 2)}`;
+    }
+    renderRequest();
+    const runButton = document.getElementById('run-demo'); const output = document.getElementById('demo-output'); const phases = [...document.querySelectorAll('#timeline span')];
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+    runButton.addEventListener('click', async () => {
+      runButton.disabled = true; output.classList.remove('placeholder'); output.textContent = ''; phases.forEach(el => el.classList.remove('live'));
+      const chunks = ['你好', '，', '世界', '。'];
+      for (let i = 0; i < phases.length; i++) { phases[i].classList.add('live'); await delay(420); }
+      for (const chunk of chunks) { output.textContent += chunk; await delay(300); }
+      await delay(320); phases.forEach(el => el.classList.remove('live')); runButton.disabled = false;
+    });
+  </script>
+</body>
+</html>
