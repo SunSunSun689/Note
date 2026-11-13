@@ -7,6 +7,7 @@ export interface WordLookupMeaning {
 export interface WordLookupPreview {
     word: string
     phonetic?: string
+    audio?: string
     meanings: WordLookupMeaning[]
     sourceUrl?: string
 }
@@ -24,7 +25,7 @@ interface DictionaryMeaning {
 interface DictionaryEntry {
     word?: string
     phonetic?: string
-    phonetics?: Array<{ text?: string }>
+    phonetics?: Array<{ text?: string; audio?: string }>
     meanings?: DictionaryMeaning[]
     sourceUrls?: string[]
 }
@@ -61,6 +62,7 @@ export function parseDictionaryResponse(payload: unknown, fallbackWord: string):
     return {
         word: entry.word ?? fallbackWord,
         phonetic: entry.phonetic ?? entry.phonetics?.find((item) => item.text)?.text,
+        audio: entry.phonetics?.find((item) => item.audio)?.audio,
         meanings,
         sourceUrl: entry.sourceUrls?.[0],
     }

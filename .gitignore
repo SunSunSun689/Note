@@ -17,3 +17,6 @@ npm-error.log
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# 构建占位/自签 crx 包
+*.crx

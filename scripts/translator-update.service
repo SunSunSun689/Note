@@ -1,0 +1,10 @@
+[Unit]
+Description=Translator extension update server (localhost:8930)
+After=network.target
+
+[Service]
+ExecStart=__NODE__ __REPO_DIR__/scripts/serve-extension-updates.js __REPO_DIR__/dist/selfhost
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

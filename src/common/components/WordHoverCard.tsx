@@ -12,14 +12,16 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { createUseStyles } from 'react-jss'
-import { RxArrowRight, RxExternalLink } from 'react-icons/rx'
+import { RxArrowRight, RxExternalLink, RxSpeakerLoud } from 'react-icons/rx'
 import { useTranslation } from 'react-i18next'
 import { IThemedStyleProps } from '../types'
 import { useTheme } from '../hooks/useTheme'
 import { useSettings } from '../hooks/useSettings'
 import { lookupEnglishWord, WordLookupPreview } from '../services/wordLookup'
-import { SpeakerIcon } from './SpeakerIcon'
+import { playAudioChain, resolveAudioSources } from '../services/wordAudio'
+import { defaultTTSProvider, doSpeak } from '../tts'
 import { SpinnerIcon } from './SpinnerIcon'
+import SpeakerMotion from './SpeakerMotion'
 
 const ENGLISH_WORD_PATTERN = /[A-Za-z]+(?:[’'][A-Za-z]+)*(?:-[A-Za-z]+)*/g
 const CARD_WIDTH = 320
@@ -33,6 +35,7 @@ interface ActiveWord {
 interface WordHoverContextValue {
     enabled: boolean
     show: (word: string, anchor: HTMLElement, immediate?: boolean) => void
+    pin: () => void
     scheduleHide: () => void
     keepOpen: () => void
     openDetails: (word: string) => void
@@ -219,6 +222,8 @@ export function WordHoverProvider({ children, enabled = true, onOpenDetails }: W
     const cardRef = useRef<HTMLDivElement>(null)
     const showTimerRef = useRef<ReturnType<typeof setTimeout>>()
     const hideTimerRef = useRef<ReturnType<typeof setTimeout>>()
+    const pinnedRef = useRef(false)
+    const stopAudioRef = useRef<(() => void) | undefined>()
 
     const clearTimers = useCallback(() => {
         clearTimeout(showTimerRef.current)
@@ -229,7 +234,12 @@ export function WordHoverProvider({ children, enabled = true, onOpenDetails }: W
         clearTimeout(hideTimerRef.current)
     }, [])
 
+    const pin = useCallback(() => {
+        pinnedRef.current = true
+    }, [])
+
     const scheduleHide = useCallback(() => {
+        if (pinnedRef.current) return
         clearTimeout(showTimerRef.current)
         clearTimeout(hideTimerRef.current)
         hideTimerRef.current = setTimeout(() => setActiveWord(null), 130)
@@ -238,6 +248,7 @@ export function WordHoverProvider({ children, enabled = true, onOpenDetails }: W
     const show = useCallback(
         (word: string, anchor: HTMLElement, immediate = false) => {
             if (!enabled) return
+            pinnedRef.current = false
             clearTimers()
             setActiveWord((currentWord) => (currentWord?.word === word ? currentWord : null))
             showTimerRef.current = setTimeout(
@@ -260,6 +271,41 @@ export function WordHoverProvider({ children, enabled = true, onOpenDetails }: W
         },
         [clearTimers, onOpenDetails]
     )
+
+    const [isSpeaking, setIsSpeaking] = useState(false)
+
+    const handleSpeak = useCallback(() => {
+        if (!activeWord) return
+        if (isSpeaking) {
+            stopAudioRef.current?.()
+            setIsSpeaking(false)
+            return
+        }
+        setIsSpeaking(true)
+        const controller = new AbortController()
+        const stopChain = playAudioChain(
+            resolveAudioSources(activeWord.word, preview?.audio),
+            () => {
+                const ttsVoice = settings.tts?.voices?.find((item) => item.lang === 'en')?.voice
+                doSpeak({
+                    provider: settings.tts?.provider ?? defaultTTSProvider,
+                    lang: 'en',
+                    text: activeWord.word,
+                    voice: ttsVoice,
+                    volume: settings.tts?.volume,
+                    rate: settings.tts?.rate,
+                    signal: controller.signal,
+                    onFinish: () => setIsSpeaking(false),
+                }).catch(() => setIsSpeaking(false))
+            },
+            undefined,
+            () => setIsSpeaking(false)
+        )
+        stopAudioRef.current = () => {
+            stopChain()
+            controller.abort()
+        }
+    }, [activeWord, isSpeaking, preview?.audio, settings.tts])
 
     useEffect(() => clearTimers, [clearTimers])
 
@@ -305,23 +351,35 @@ export function WordHoverProvider({ children, enabled = true, onOpenDetails }: W
 
     useEffect(() => {
         if (!activeWord) return
-        const hide = () => setActiveWord(null)
+        const hide = () => {
+            pinnedRef.current = false
+            stopAudioRef.current?.()
+            setActiveWord(null)
+        }
         const onKeyDown = (event: globalThis.KeyboardEvent) => {
             if (event.key === 'Escape') hide()
+        }
+        const onDocumentClick = (event: globalThis.MouseEvent) => {
+            if (!cardRef.current) return
+            const path = event.composedPath()
+            if (path.includes(cardRef.current) || path.includes(activeWord.anchor)) return
+            hide()
         }
         window.addEventListener('resize', hide)
         window.addEventListener('scroll', hide, true)
         document.addEventListener('keydown', onKeyDown)
+        document.addEventListener('click', onDocumentClick)
         return () => {
             window.removeEventListener('resize', hide)
             window.removeEventListener('scroll', hide, true)
             document.removeEventListener('keydown', onKeyDown)
+            document.removeEventListener('click', onDocumentClick)
         }
     }, [activeWord])
 
     const contextValue = useMemo(
-        () => ({ enabled, show, scheduleHide, keepOpen, openDetails }),
-        [enabled, keepOpen, openDetails, scheduleHide, show]
+        () => ({ enabled, show, pin, scheduleHide, keepOpen, openDetails }),
+        [enabled, keepOpen, openDetails, pin, scheduleHide, show]
     )
 
     const card = activeWord ? (
@@ -339,16 +397,14 @@ export function WordHoverProvider({ children, enabled = true, onOpenDetails }: W
                     <div className={styles.wordTitle}>{preview?.word ?? activeWord.word}</div>
                     {preview?.phonetic ? <div className={styles.phonetic}>{preview.phonetic}</div> : null}
                 </div>
-                <button type='button' className={styles.speakerButton} title={t('Speak')} aria-label={t('Speak')}>
-                    <SpeakerIcon
-                        size={15}
-                        provider={settings.tts?.provider}
-                        text={activeWord.word}
-                        lang='en'
-                        voice={settings.tts?.voices?.find((item) => item.lang === 'en')?.voice}
-                        rate={settings.tts?.rate}
-                        volume={settings.tts?.volume}
-                    />
+                <button
+                    type='button'
+                    className={styles.speakerButton}
+                    title={t('Speak')}
+                    aria-label={t('Speak')}
+                    onClick={handleSpeak}
+                >
+                    {isSpeaking ? <SpeakerMotion size={15} /> : <RxSpeakerLoud size={15} />}
                 </button>
             </div>
             {status === 'loading' ? (
@@ -422,7 +478,8 @@ export function HoverableText({ children }: { children: string }) {
         const handleKeyDown = (event: KeyboardEvent<HTMLSpanElement>) => {
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault()
-                context.openDetails(word)
+                context.show(word, event.currentTarget, true)
+                context.pin()
             }
         }
         parts.push(
@@ -435,7 +492,10 @@ export function HoverableText({ children }: { children: string }) {
                 onMouseLeave={context.scheduleHide}
                 onFocus={(event) => context.show(word, event.currentTarget, true)}
                 onBlur={context.scheduleHide}
-                onClick={() => context.openDetails(word)}
+                onClick={(event) => {
+                    context.show(word, event.currentTarget, true)
+                    context.pin()
+                }}
                 onKeyDown={handleKeyDown}
             >
                 {word}

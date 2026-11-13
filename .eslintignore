@@ -2,3 +2,6 @@ public
 dist
 src/tauri/bindings.ts
 src-safari
+
+# 纯 Node 部署脚本,不在 tsconfig 范围
+scripts/
